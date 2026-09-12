@@ -9,26 +9,27 @@ Discord ACE permissions script adapted to use the Nights Software Discord API.
 - Maps Discord roles to ACE groups/principals
 - Grants and removes ACE principals automatically
 - Tracks granted permissions per player for clean disconnect handling
-- `/refreshPerms` command with cooldown throttling
+- Refresh command (default `/refreshPerms`, configurable via `Config.RefreshCommand`) with cooldown throttling
 - Configurable debug logging
 
 ## Files
 
-- `/home/runner/work/DiscordAcePerms-Nights/DiscordAcePerms-Nights/fxmanifest.lua`
-- `/home/runner/work/DiscordAcePerms-Nights/DiscordAcePerms-Nights/config.lua`
-- `/home/runner/work/DiscordAcePerms-Nights/DiscordAcePerms-Nights/server.lua`
+- `fxmanifest.lua`
+- `config.lua`
+- `server.lua`
 
 ## Setup
 
 1. Ensure your Nights Discord API resource (or endpoint) is available.
-2. Edit `/home/runner/work/DiscordAcePerms-Nights/DiscordAcePerms-Nights/config.lua`:
+2. Edit `config.lua`:
    - Set API mode (`export` or `http`)
    - Configure export name/resource or endpoint/token
    - Configure `Config.RoleList` for Discord role -> ACE groups
 3. Add resource to your `server.cfg`:
    ```cfg
-   ensure DiscordAcePerms-Nights
+   ensure <your_resource_folder_name>
    ```
+   (If your folder is named `DiscordAcePerms-Nights`, then use `ensure DiscordAcePerms-Nights`.)
 4. Ensure your `chat` resource is running for in-game status messages.
 
 ## Role Mapping Example

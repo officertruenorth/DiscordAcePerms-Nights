@@ -1,5 +1,7 @@
 local grantedPrincipals = {}
 local refreshThrottle = {}
+local activeConnectTickets = {}
+local connectTicketCounter = 0
 
 local function getPrefix()
     return (Config.Messages and Config.Messages.Prefix) or '^3[Talos]^7:'
@@ -191,6 +193,14 @@ local function clearPrincipals(source)
         return
     end
 
+    local function toSet(values)
+        local set = {}
+        for i = 1, #values do
+            set[values[i]] = true
+        end
+        return set
+    end
+
     for i = 1, #principals do
         ExecuteCommand(('remove_principal player.%s %s'):format(source, principals[i]))
     end
@@ -200,16 +210,24 @@ end
 
 local function getMappedPrincipals(roleSet)
     local mapped = {}
+    local seen = {}
     local roleList = Config.RoleList or {}
 
     for roleId, principalOrList in pairs(roleList) do
         if roleSet[roleId] then
             if type(principalOrList) == 'table' then
                 for i = 1, #principalOrList do
-                    mapped[#mapped + 1] = principalOrList[i]
+                    local principal = principalOrList[i]
+                    if type(principal) == 'string' and not seen[principal] then
+                        seen[principal] = true
+                        mapped[#mapped + 1] = principal
+                    end
                 end
             elseif type(principalOrList) == 'string' then
-                mapped[#mapped + 1] = principalOrList
+                if not seen[principalOrList] then
+                    seen[principalOrList] = true
+                    mapped[#mapped + 1] = principalOrList
+                end
             end
         end
     end
@@ -218,8 +236,6 @@ local function getMappedPrincipals(roleSet)
 end
 
 local function applyDiscordPerms(source, notify)
-    clearPrincipals(source)
-
     local discordId = getDiscordIdentifier(source)
     if not discordId then
         if notify then
@@ -234,25 +250,70 @@ local function applyDiscordPerms(source, notify)
         return
     end
 
-    local principals = getMappedPrincipals(roleSet)
-    grantedPrincipals[source] = principals
+    local newPrincipals = getMappedPrincipals(roleSet)
+    local oldPrincipals = grantedPrincipals[source] or {}
+    local oldSet = toSet(oldPrincipals)
+    local newSet = toSet(newPrincipals)
 
-    for i = 1, #principals do
-        ExecuteCommand(('add_principal player.%s %s'):format(source, principals[i]))
+    for i = 1, #oldPrincipals do
+        local principal = oldPrincipals[i]
+        if not newSet[principal] then
+            ExecuteCommand(('remove_principal player.%s %s'):format(source, principal))
+        end
     end
 
-    logDebug(('Applied %s principal(s) to player %s (discord %s).'):format(#principals, source, discordId))
+    for i = 1, #newPrincipals do
+        local principal = newPrincipals[i]
+        if not oldSet[principal] then
+            ExecuteCommand(('add_principal player.%s %s'):format(source, principal))
+        end
+    end
+
+    grantedPrincipals[source] = newPrincipals
+
+    logDebug(('Applied %s principal(s) to player %s (discord %s).'):format(#newPrincipals, source, discordId))
 
     if notify then
         sendMessage(source, (Config.Messages and Config.Messages.Refreshed) or 'Your Discord permissions have been refreshed.')
     end
 end
 
+local function syncPlayerPermsOnConnect(source)
+    connectTicketCounter = connectTicketCounter + 1
+    local ticket = connectTicketCounter
+    activeConnectTickets[source] = ticket
+
+    local attempts = tonumber(Config.ConnectRetryAttempts) or 1
+    local delayMs = tonumber(Config.ConnectRetryDelayMs) or 0
+
+    CreateThread(function()
+        for _ = 1, attempts do
+            if activeConnectTickets[source] ~= ticket then
+                return
+            end
+
+            local discordId = getDiscordIdentifier(source)
+            if discordId then
+                if activeConnectTickets[source] ~= ticket then
+                    return
+                end
+                applyDiscordPerms(source, false)
+                return
+            end
+
+            Wait(delayMs)
+        end
+
+        logDebug(('Skipped connect sync for %s because no Discord identifier was detected.'):format(source))
+    end)
+end
+
 AddEventHandler('playerJoining', function()
-    applyDiscordPerms(source, false)
+    syncPlayerPermsOnConnect(source)
 end)
 
 AddEventHandler('playerDropped', function()
+    activeConnectTickets[source] = nil
     clearPrincipals(source)
     refreshThrottle[source] = nil
 end)

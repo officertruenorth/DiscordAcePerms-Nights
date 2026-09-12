@@ -4,6 +4,8 @@ Config.Debug = false
 Config.RefreshCommand = 'refreshPerms'
 Config.RefreshCooldown = 30
 Config.RefreshAce = 'command.refreshperms'
+Config.ConnectRetryAttempts = 10
+Config.ConnectRetryDelayMs = 1000
 
 Config.Messages = {
     Prefix = '^3[Talos]^7:',
